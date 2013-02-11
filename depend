@@ -1,0 +1,64 @@
+#!/usr/bin/python
+
+import sys
+import os
+import datetime
+
+if len(sys.argv) != 3:
+    print "usage: depend Product.name Dependency.name"
+    exit()
+
+productName = sys.argv[1]
+product = sys.argv[1].split(".")
+
+dependencyName = sys.argv[2]
+dependency = sys.argv[2].split(".")
+
+reply = raw_input("Adding %s as dependency in the %s product. Is this right? (y / n)"%(dependencyName, productName))
+if reply == "y" or reply == "Y":
+    print("Updating setup.py.......")
+    os.chdir(productName)
+    setupTmp = open("setup.py.tmp", "w")
+    setup = open("setup.py", "r")
+    
+    line = setup.readline()
+    while line:
+        setupTmp.write(line)
+        if line.find("# -*- Extra requirements: -*-") != -1:
+            setupTmp.write("""              '%s',
+"""%dependencyName)
+            
+        line = setup.readline()
+        
+    setup.close()
+    setupTmp.close()
+    os.rename("setup.py.tmp", "setup.py")
+    
+    for f in product:
+        os.chdir("%s"%f)
+    
+    print("Updating metadata.xml.......")
+    try:
+        metadataXML = open('profiles/default/metadata.xml', 'r')
+        metadataXMLTmp = open('profiles/default/metadata.xml.tmp', 'w')
+        line = metadataXML.readline()
+        while line:
+            metadataXMLTmp.write(line)
+            if line.find("</version>") != -1:
+                metadataXMLTmp.write("""            <dependencies>
+              <dependency>profile-%s:default</dependency>
+        </dependencies>
+"""%dependencyName)
+                
+            line = metadataXML.readline()
+        metadataXML.close()
+        metadataXMLTmp.close()
+        os.rename("profiles/default/metadata.xml.tmp", "profiles/default/metadata.xml")
+        
+    except IOError:
+        print("metadata.xml is not there, nothing to do here then. We're all good!!")
+        
+    print("Dependency added. Enjoy life!")
+else:
+    print("Ok ok, I'll cancel it then.")
+    

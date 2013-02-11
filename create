@@ -1,0 +1,142 @@
+#!/usr/bin/python
+
+import sys
+import os
+import datetime
+
+if len(sys.argv) != 3:
+    print "usage: create Product.name typeOfTemplate"
+    exit()
+
+productName = sys.argv[1]
+product = sys.argv[1].split(".")
+typeOfTemplate = sys.argv[2]
+
+reply = raw_input("Is this new to the collective SVN? (y/n): ")
+if reply == "y" or reply == "Y":
+    print("creating trunk on svn.....")
+    os.system('svn mkdir --parents -m"creating trunk for new product" https://svn.plone.org/svn/collective/%s/trunk'%productName)
+    reply2 = "n"
+else:
+    reply2 = raw_input("Want to clear out the product before starting over? (y/n): ")
+
+print("Checking out from collective svn.....")
+os.system('svn co https://svn.plone.org/svn/collective/%s/trunk %s'%(productName, productName))
+
+if reply2 == "y" or reply == "Y":
+    print("Deleting the hell out of that svn dirty code.....")
+    os.system('svn rm %s/* --force'%productName)
+    os.system('svn commit -m"Starting over from scratch..." %s'%productName)
+
+print("Running paster plugin with -t %s...... Ready for the annoying questions?"%typeOfTemplate)
+os.system('sudo ../bin/paster create -t %s %s'%(typeOfTemplate, productName))
+
+print("Changing owner of the files to david.....")
+os.system('sudo chown -R david %s'%productName)
+
+print("Commiting the framework.......")
+os.chdir(productName)
+os.system('svn commit -m"Adding skeleton created with paster"')
+
+for f in product:
+    os.chdir("%s"%f)
+
+reply = raw_input("create common usefull theme files and folders like browser, profiles/default etc? (y/n): ")
+if reply == "y" or reply == "Y":
+    
+    print("creating new files and folders.........")
+    os.system('svn mkdir --parents profiles/default; svn mkdir browser; touch profiles/default/metadata.xml browser/__init__.py browser/configure.zcml')
+    
+    #============ ADD CONFIG.ZCML TO BROWSER =================
+    print("Initializing Browser configuration.......")
+    browserConfig = """<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:plone="http://namespaces.plone.org/plone"
+i18n_domain="%s">
+</configure>
+"""%productName
+    browserConfigZCML = open('browser/configure.zcml', "w")
+    browserConfigZCML.write(browserConfig)
+    browserConfigZCML.close()
+    
+    
+    #============ ADD METADATA.XML TO PROFILES =================
+    print("Initializing Metadata XML.......")
+    metadata = """<?xml version="1.0"?>
+<metadata>
+    <version>0.1</version>
+</metadata>
+"""
+    metadataXML = open('profiles/default/metadata.xml', 'w')
+    metadataXML.write(metadata)
+    metadataXML.close()
+    
+    #============ INCLUDE BROWSER PACKAGE =================
+    print("Adding browser package ZCML include.......")
+    addBrowserPackageLine = '<include package=".browser" />'
+    configureZCMLTmp = open("configure.zcml.tmp", "w")
+    configureZCMLOriginal = open("configure.zcml", "r")
+    line = configureZCMLOriginal.readline()
+    
+    while line:
+        if line.find('<five:registerPackage package="." initialize=".initialize" />') != -1:
+            configureZCMLTmp.write(line)
+            configureZCMLTmp.write(addBrowserPackageLine)
+            
+        else:
+            configureZCMLTmp.write(line)
+        
+        line = configureZCMLOriginal.readline()
+    configureZCMLOriginal.close()
+    configureZCMLTmp.close()
+    os.rename("configure.zcml.tmp", "configure.zcml")
+    
+    print("adding new files to SVN.......")
+    os.system('svn add browser/* profiles/default/*')
+    
+    print("Committing......")
+    os.system('svn commit -m"adding profile and browser packages"')
+else:
+    print("Ok, Maybe next time then!")
+    
+reply = raw_input("By the way, Want a Add-on specific layer with that? (y/n): ")
+if reply == "y" or reply == "Y":
+    print("Creating and adding interfaces.py......")
+    #TODO: add a question to name the interface default to I[lastnameOfProduct]Installed
+    interfacesText = """
+import zope.interface
+
+class I%sInstalled(zope.interface.Interface):
+    \"\"\"A layer specific for this add-on product.
+
+    This interface is referred in browserlayers.xml.
+
+    All views and viewlets registered against this layer will appear on your Plone site
+    only when the add-on installer has been run.     \"\"\"
+
+    """%"".join(product)
+    interfaces = open("interfaces.py","w")
+    interfaces.write(interfacesText)
+    interfaces.close()
+    
+    print("Creating and adding browserlayer.xml......")
+    browserLayerText = """<?xml version="1.0"?>
+<layers>
+ <layer
+     name="%(prod)s"
+     interface="%(prod)s.interfaces.%(interface)s"
+     />
+</layers>
+
+    """%{'prod':productName, 'interface': "I%sInstalled"%"".join(product)}
+    browserLayer = open("profiles/default/browserlayer.xml", "w")
+    browserLayer.write(browserLayerText)
+    browserLayer.close()
+    
+    print("Browser layer named %s was created. You can refer to this layer on your ZCML"%("I%sInstalled"%"".join(product)))
+    
+else:
+    print("Alrighty then! I'll cancel that.")
+
+print("We're DONE!! Happy coding!")

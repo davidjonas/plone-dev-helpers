@@ -1,0 +1,124 @@
+#!/usr/bin/python
+
+import sys
+import os
+import datetime
+
+if len(sys.argv) != 2:
+    print "usage: update Product.name"
+    exit()
+
+productName = sys.argv[1]
+product = sys.argv[1].split(".")
+setupFile = productName + "/setup.py"
+historyFile = productName + "/docs/HISTORY.txt"
+metadataFile = productName + "/" + "/".join(product) + "/profiles/default/metadata.xml"
+
+print "---- Updating files ----"
+print setupFile
+print historyFile
+print metadataFile
+print "\n"
+
+try:
+    setup = open(setupFile, "r")
+    history = open(historyFile, "r")
+    metadata = open(metadataFile, "r")
+    
+    
+    #============ READ VERSION AND UPDATE SETUP.PY =================
+    version = ""
+    line = setup.readline()
+    setupTmp = open(setupFile + ".tmp", "w")
+    
+    while line:
+        if line.find("version =") != -1:
+            version = line[line.find("'"):]
+            versionParts = version[1:-2].split(".")
+            newVersion = "'" + ".".join(versionParts[:-1]) + "." + "%d"%(int(versionParts[len(versionParts)-1])+1) +"'"
+            setupTmp.write("version = " + newVersion + "\n")
+        else:
+            setupTmp.write(line);
+        line = setup.readline()
+    
+    print "version: " + version
+    print "new version: " + newVersion
+    
+    setup.close()
+    setupTmp.close()
+    os.rename(setupFile + ".tmp", setupFile)
+    print "updated " + setupFile + " successfuly."
+    
+    
+    #============ UPDATE METADATA.XML =================
+    line = metadata.readline()
+    metadataTmp = open(metadataFile + ".tmp", "w")
+    
+    while line:
+        if line.find("<version>") != -1:
+            metadataTmp.write("  <version>"+ newVersion[1:-1] +"</version>\n")
+        else:
+            metadataTmp.write(line);
+        line = metadata.readline()
+    
+    metadata.close()
+    metadataTmp.close()
+    os.rename(metadataFile + ".tmp", metadataFile)
+    print "updated " + metadataFile + " successfuly."
+    
+    #============ Update HISTORY ======================
+    historyTmp = open(historyFile + ".tmp", "w")
+    line = history.readline()
+    historyTmp.write(line);
+    line = history.readline()
+    historyTmp.write(line);
+    dateFormatted = datetime.date.today().strftime("%Y-%m-%d")
+    historyTmp.write(newVersion[1:-1] + " (" + dateFormatted + ")\n");
+    historyTmp.write("---------------------\n");
+    historyTmp.write("\n");
+    
+    line = history.readline()
+    while line:
+        historyTmp.write(line);
+        line = history.readline()
+    
+    history.close()
+    historyTmp.close()
+    os.rename(historyFile + ".tmp", historyFile)
+    print "updated " + historyFile + " successfuly."
+    
+    #============ Edit history ======================
+    os.system("nano " + historyFile)
+    
+    #============ RELEASE?? ======================
+    #reply = raw_input("release to pypi? (y/n): ")
+    #if reply == "y" or reply == "Y":
+    #    os.chdir(productName)
+    #    os.system("sudo ../../../Python-2.6/bin/python setup.py egg_info -RDb sdist register upload")
+    #    os.system("sudo ../../../Python-2.6/bin/python setup.py egg_info -RDb bdist_egg register upload")
+    
+    
+except:
+    print "there was a problem finding or opening the necessary files."
+    print "Open files will be closed, here's the stack trace:"
+    print "-----------------------------------------------------------"
+    if setup:
+        setup.close()
+    if history:
+        history.close()
+    if metadata:
+        metadata.close()
+    if setupTmp:
+        setupTmp.close()
+    raise
+    exit()
+
+
+if setup:
+    setup.close()
+if history:
+    history.close()
+if metadata:
+    metadata.close()
+if setupTmp:
+    setupTmp.close()
